@@ -15,4 +15,5 @@ jobs:
           python-version: '3.12'
       - run: uv sync
       - run: uv run python -m compileall src
+      - run: uv lock --check
       - run: docker build -t should-i-take-umbrella-today .

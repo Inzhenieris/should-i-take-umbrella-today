@@ -8,11 +8,15 @@ Every morning it checks Open-Meteo for Riga and looks for rain in two windows:
 - morning commute: 07:00 to 09:30 Europe/Riga
 - evening commute: 16:30 to 18:30 Europe/Riga
 
-If rain is expected in either window, it posts a message to Discord.
+It posts:
+- a startup message when the run begins
+- the umbrella forecast message
+- a shutdown message when the run ends, including failures
 
 ## Environment variables
 
 - `DISCORD_WEBHOOK_URL` - Discord webhook for the `should-i-take-umbrella` channel
+- `DISCORD_MENTION` - optional mention string, default `<@504997242525188099>`
 - `LATITUDE` - default `56.9496`
 - `LONGITUDE` - default `24.1052`
 - `TIMEZONE` - default `Europe/Riga`
