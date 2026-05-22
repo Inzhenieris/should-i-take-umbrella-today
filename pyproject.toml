@@ -1,0 +1,19 @@
+[project]
+name = "should-i-take-umbrella-today"
+version = "0.1.0"
+description = "Daily Riga umbrella reminder bot"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "httpx>=0.28.1",
+]
+
+[project.scripts]
+umbrella-check = "should_i_take_umbrella.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
