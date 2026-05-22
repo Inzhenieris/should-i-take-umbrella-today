@@ -114,7 +114,12 @@ def build_status_message(stage: str, details: str | None = None) -> str:
 
 
 def post_to_discord(client: httpx.Client, webhook_url: str, content: str) -> None:
-    response = client.post(webhook_url, json={"content": content}, timeout=30.0)
+    response = client.post(
+        webhook_url,
+        json={"content": content},
+        headers={"User-Agent": "openclaw"},
+        timeout=30.0,
+    )
     response.raise_for_status()
 
 
