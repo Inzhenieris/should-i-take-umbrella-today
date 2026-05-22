@@ -29,6 +29,7 @@ jobs:
           images: ghcr.io/inzhenieris/should-i-take-umbrella-today
           tags: |
             type=raw,value=latest
+            type=raw,value=prod
             type=sha
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
