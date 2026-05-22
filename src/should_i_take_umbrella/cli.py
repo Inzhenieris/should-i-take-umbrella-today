@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import time as time_module
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -21,6 +22,10 @@ class Window:
 
 def env_time(name: str, default: str) -> time:
     return time.fromisoformat(os.getenv(name, default))
+
+
+def scheduler_time() -> time:
+    return env_time("SCHEDULE_TIME", "06:30")
 
 
 def build_windows() -> list[Window]:
@@ -141,24 +146,51 @@ def run_check(client: httpx.Client, webhook_url: str) -> str:
     return content
 
 
-def main() -> None:
+def next_run_at(now: datetime, scheduled: time) -> datetime:
+    candidate = now.replace(hour=scheduled.hour, minute=scheduled.minute, second=0, microsecond=0)
+    if candidate <= now:
+        candidate = candidate + timedelta(days=1)
+    return candidate
+
+
+def run_scheduler() -> None:
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
     if not webhook_url:
         raise SystemExit("DISCORD_WEBHOOK_URL is required")
 
+    timezone = os.getenv("TIMEZONE", "Europe/Riga")
+    tz = ZoneInfo(timezone)
+    scheduled = scheduler_time()
+
     with httpx.Client() as client:
-        post_to_discord(client, webhook_url, build_status_message("startup"))
-        try:
-            content = run_check(client, webhook_url)
-            post_to_discord(client, webhook_url, build_status_message("shutdown", "Run completed successfully."))
-            print(json.dumps({"posted": True, "content": content}, ensure_ascii=False))
-        except Exception as exc:
-            post_to_discord(
-                client,
-                webhook_url,
-                build_status_message("shutdown", f"Run failed: {type(exc).__name__}: {exc}"),
-            )
-            raise
+        post_to_discord(
+            client,
+            webhook_url,
+            build_status_message("startup", f"Scheduler armed for {scheduled.strftime('%H:%M')} {timezone}."),
+        )
+        while True:
+            now = datetime.now(tz)
+            run_at = next_run_at(now, scheduled)
+            sleep_seconds = max(1, int((run_at - now).total_seconds()))
+            time_module.sleep(sleep_seconds)
+            try:
+                content = run_check(client, webhook_url)
+                post_to_discord(
+                    client,
+                    webhook_url,
+                    build_status_message("shutdown", "Run completed successfully."),
+                )
+                print(json.dumps({"posted": True, "content": content}, ensure_ascii=False))
+            except Exception as exc:
+                post_to_discord(
+                    client,
+                    webhook_url,
+                    build_status_message("shutdown", f"Run failed: {type(exc).__name__}: {exc}"),
+                )
+
+
+def main() -> None:
+    run_scheduler()
 
 
 if __name__ == "__main__":
