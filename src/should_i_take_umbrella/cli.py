@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import atexit
 import json
 import os
+import signal
 import time as time_module
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -91,23 +93,19 @@ def build_weather_message(
     timezone: str,
     hits_by_window: dict[str, list[tuple[datetime, dict[str, float]]]],
 ) -> str:
-    lines = [f"☔ {USER_MENTION} umbrella check for {day.isoformat()} ({timezone})"]
-    rainy = False
+    rainy = any(hits for hits in hits_by_window.values())
+    lead = "Take the umbrella." if rainy else "No umbrella."
+    lines = [f"☔ {USER_MENTION} {lead}", f"Forecast for {day.isoformat()} ({timezone}):"]
     for label, hits in hits_by_window.items():
         if not hits:
             lines.append(f"- {label}: no rain expected")
             continue
-        rainy = True
         parts = []
         for stamp, values in hits:
             parts.append(
                 f"{stamp.strftime('%H:%M')} ({int(values['probability'])}% / {values['precipitation']:.1f} mm)"
             )
         lines.append(f"- {label}: rain possible at {', '.join(parts)}")
-    if rainy:
-        lines.append("Take umbrella.")
-    else:
-        lines.append("No umbrella needed based on current forecast.")
     return "\n".join(lines)
 
 
@@ -153,6 +151,27 @@ def next_run_at(now: datetime, scheduled: time) -> datetime:
     return candidate
 
 
+def install_shutdown_notifier(client: httpx.Client, webhook_url: str) -> None:
+    sent = {"value": False}
+
+    def notify(reason: str) -> None:
+        if sent["value"]:
+            return
+        sent["value"] = True
+        try:
+            post_to_discord(client, webhook_url, build_status_message("shutdown", reason))
+        except Exception:
+            pass
+
+    def handle_signal(signum, _frame) -> None:
+        notify(f"Received signal {signum}.")
+        raise SystemExit(0)
+
+    atexit.register(lambda: notify("Process exiting."))
+    signal.signal(signal.SIGTERM, handle_signal)
+    signal.signal(signal.SIGINT, handle_signal)
+
+
 def run_scheduler() -> None:
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
     if not webhook_url:
@@ -163,6 +182,7 @@ def run_scheduler() -> None:
     scheduled = scheduler_time()
 
     with httpx.Client() as client:
+        install_shutdown_notifier(client, webhook_url)
         post_to_discord(
             client,
             webhook_url,
@@ -175,17 +195,12 @@ def run_scheduler() -> None:
             time_module.sleep(sleep_seconds)
             try:
                 content = run_check(client, webhook_url)
-                post_to_discord(
-                    client,
-                    webhook_url,
-                    build_status_message("shutdown", "Run completed successfully."),
-                )
                 print(json.dumps({"posted": True, "content": content}, ensure_ascii=False))
             except Exception as exc:
                 post_to_discord(
                     client,
                     webhook_url,
-                    build_status_message("shutdown", f"Run failed: {type(exc).__name__}: {exc}"),
+                    build_status_message("run failed", f"{type(exc).__name__}: {exc}"),
                 )
 
 
