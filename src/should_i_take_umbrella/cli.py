@@ -13,6 +13,8 @@ import httpx
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 USER_MENTION = os.getenv("DISCORD_MENTION", "<@504997242525188099>")
+MIN_RAIN_PROBABILITY = float(os.getenv("MIN_RAIN_PROBABILITY", "20"))
+MIN_RAIN_MM = float(os.getenv("MIN_RAIN_MM", "0.1"))
 
 
 @dataclass(frozen=True)
@@ -82,7 +84,7 @@ def window_hits(
         if local_stamp.date() != day:
             continue
         if window.start <= local_stamp.time() <= window.end and (
-            values["precipitation"] > 0 or values["probability"] > 0
+            values["precipitation"] >= MIN_RAIN_MM or values["probability"] >= MIN_RAIN_PROBABILITY
         ):
             hits.append((local_stamp, values))
     return hits
